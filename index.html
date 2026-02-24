@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Spelling Coach</title>
+
+<style>
+/* ===== BASE ===== */
+
+body{
+  font-family: "Arial Rounded MT Bold","Chalkboard SE","Comic Sans MS",system-ui,sans-serif;
+  background:#f7f9fc;
+  margin:0;
+  padding:20px;
+  font-size:22px;
+}
+
+.card{
+  max-width:900px;
+  margin:auto;
+  background:#fff;
+  padding:26px;
+  border-radius:20px;
+  box-shadow:0 4px 12px rgba(0,0,0,.08);
+}
+
+/* ===== TEXT ===== */
+
+h2,h3{
+  text-align:center;
+  margin-bottom:10px;
+}
+
+.big{
+  font-size:44px;
+  font-weight:800;
+  text-align:center;
+  margin:20px 0;
+}
+
+.muted{
+  color:#555;
+  font-size:18px;
+  line-height:1.4;
+}
+
+/* ===== INPUTS ===== */
+
+textarea{
+  width:100%;
+  height:200px;
+  font-size:22px;
+  padding:14px;
+  border-radius:12px;
+  border:2px solid #ddd;
+}
+
+button,select{
+  font-size:22px;
+  padding:14px 20px;
+  border-radius:14px;
+  border:2px solid #ddd;
+  background:#fff;
+  cursor:pointer;
+}
+
+button.primary{
+  background:#2563eb;
+  color:white;
+  border:none;
+}
+
+button.primary:hover{
+  background:#1d4ed8;
+}
+
+button.warn{
+  border-color:#dc2626;
+  color:#dc2626;
+}
+
+button:hover{
+  transform:scale(1.02);
+}
+
+/* ===== LAYOUT ===== */
+
+.row{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  justify-content:center;
+  margin:10px 0;
+}
+
+.hidden{display:none;}
+
+.pill{
+  background:#eef2ff;
+  padding:6px 16px;
+  border-radius:999px;
+  font-size:18px;
+}
+
+/* ===== TABLE ===== */
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:16px;
+}
+
+th,td{
+  padding:14px;
+  border-bottom:1px solid #eee;
+  font-size:20px;
+}
+
+th{background:#f1f5f9;}
+
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>📘 Spelling Coach</h2>
+
+<!-- ================= SETUP ================= -->
+
+<div id="setup">
+
+<p class="muted">
+Paste spelling words (one per line).  
+The test will <strong>only speak</strong> the word.  
+You grade after.
+</p>
+
+<textarea id="words"></textarea>
+
+<div class="row">
+  <label class="pill">
+    <input type="checkbox" id="shuffle" checked> Shuffle Words
+  </label>
+</div>
+
+<h3>🔊 Voice (American English)</h3>
+
+<div class="row">
+  <select id="voiceSelect"></select>
+  <button id="refreshVoices">Refresh</button>
+</div>
+
+<div class="row">
+  Speed:
+  <input type="range" id="rate" min="0.7" max="1.2" step="0.05" value="0.9">
+  <span id="rateLabel">0.9</span>
+</div>
+
+<h3>📊 Parent Tools</h3>
+
+<div class="row">
+  <button id="viewLog">View Log</button>
+  <button id="exportLog">Export to Excel</button>
+  <button class="warn" id="clearLog">Clear Log</button>
+</div>
+
+<div class="row">
+  <button class="primary" id="start">▶️ Start Test</button>
+</div>
+
+</div>
+
+<!-- ================= QUIZ ================= -->
+
+<div id="quiz" class="hidden">
+
+<div class="row">
+  <span class="pill" id="counter"></span>
+</div>
+
+<div class="big" id="prompt">
+Press Hear Word
+</div>
+
+<div class="row">
+  <button class="primary" id="hear">🔊 Hear Word</button>
+  <button id="repeat">Repeat</button>
+  <button id="next">Next ➜</button>
+</div>
+
+</div>
+
+<!-- ================= GRADING ================= -->
+
+<div id="grading" class="hidden">
+
+<h3>📝 Grade the Test</h3>
+
+<div id="gradeTable"></div>
+
+<div class="row">
+  <button class="primary" id="finishGrade">Finish</button>
+  <button id="backSetup">Back</button>
+</div>
+
+</div>
+
+<!-- ================= SUMMARY ================= -->
+
+<div id="summary" class="hidden">
+
+<h3>⭐ Results</h3>
+
+<p id="score"></p>
+
+<div id="missed"></div>
+
+<div class="row">
+  <button class="primary" id="practice">Practice Missed</button>
+  <button id="restart">Restart</button>
+  <button id="viewLog2">View Log</button>
+</div>
+
+</div>
+
+<!-- ================= LOG ================= -->
+
+<div id="logScreen" class="hidden">
+
+<h3>📊 History</h3>
+
+<div id="logData"></div>
+
+<div class="row">
+  <button id="backLog">Back</button>
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+/* ===== DEFAULT WORDS ===== */
+
+document.getElementById("words").value = `
+Dozen
+Enemy
+Deposit
+Problem
+Elegant
+Debate
+Secure
+Taken
+Bulletin
+Again
+Ability
+Distance
+About
+Sentence
+Area
+Probably
+Company
+American
+Independent
+Glistening
+`.trim();
+
+/* ===== STATE ===== */
+
+let list=[];
+let index=0;
+let order=[];
+let grades=new Map();
+let practiceMode=false;
+
+/* ===== HELPERS ===== */
+
+function show(el){
+  ["setup","quiz","grading","summary","logScreen"].forEach(id=>{
+    document.getElementById(id).classList.add("hidden");
+  });
+  document.getElementById(el).classList.remove("hidden");
+}
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    let j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+/* ===== VOICES (US ONLY) ===== */
+
+let voices=[];
+
+function loadVoices(){
+  voices = speechSynthesis.getVoices()
+    .filter(v=>v.lang==="en-US");
+
+  let sel=document.getElementById("voiceSelect");
+  sel.innerHTML="";
+
+  voices.forEach((v,i)=>{
+    let o=document.createElement("option");
+    o.value=i;
+    o.textContent=v.name;
+    sel.appendChild(o);
+  });
+}
+
+speechSynthesis.onvoiceschanged=loadVoices;
+loadVoices();
+
+/* ===== SPEAK ===== */
+
+function speak(word){
+  let u=new SpeechSynthesisUtterance(word);
+  let rate=document.getElementById("rate").value;
+
+  let v=document.getElementById("voiceSelect").value;
+  if(voices[v]) u.voice=voices[v];
+
+  u.rate=rate;
+
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+/* ===== LOG ===== */
+
+const KEY="spell_log_v2";
+
+function readLog(){
+  return JSON.parse(localStorage.getItem(KEY)||"[]");
+}
+
+function saveLog(l){
+  localStorage.setItem(KEY,JSON.stringify(l));
+}
+
+function addLog(entry){
+  let l=readLog();
+  l.unshift(entry);
+  saveLog(l);
+}
+
+/* ===== QUIZ ===== */
+
+function loadWord(){
+  document.getElementById("counter").textContent=
+    `Word ${index+1} of ${list.length}`;
+  document.getElementById("prompt").textContent=
+    "Listen and Write";
+}
+
+document.getElementById("start").onclick=()=>{
+
+  let raw=document.getElementById("words").value
+    .split("\n").map(w=>w.trim()).filter(Boolean);
+
+  if(!raw.length) return alert("Add words first.");
+
+  if(document.getElementById("shuffle").checked)
+    raw=shuffle(raw);
+
+  list=raw;
+  order=[...raw];
+  index=0;
+  grades.clear();
+  practiceMode=false;
+
+  show("quiz");
+  loadWord();
+};
+
+document.getElementById("hear").onclick=()=>speak(list[index]);
+document.getElementById("repeat").onclick=()=>speak(list[index]);
+
+document.getElementById("next").onclick=()=>{
+
+  if(index<list.length-1){
+    index++;
+    loadWord();
+  }else{
+    buildGrading();
+    show("grading");
+  }
+};
+
+/* ===== GRADING ===== */
+
+function buildGrading(){
+
+  let rows=order.map((w,i)=>`
+    <tr>
+      <td>${i+1}. <b>${w}</b></td>
+      <td>
+        <label><input type="radio" name="g${i}" value="1"> Right</label>
+        &nbsp;
+        <label><input type="radio" name="g${i}" value="0"> Wrong</label>
+      </td>
+    </tr>
+  `).join("");
+
+  document.getElementById("gradeTable").innerHTML=`
+    <table>
+      <tr><th>Word</th><th>Grade</th></tr>
+      ${rows}
+    </table>
+  `;
+}
+
+document.getElementById("finishGrade").onclick=()=>{
+
+  grades.clear();
+
+  for(let i=0;i<order.length;i++){
+    let g=document.querySelector(`input[name="g${i}"]:checked`);
+    if(!g) return alert("Grade every word.");
+    grades.set(order[i], g.value==="1");
+  }
+
+  let right=[...grades.values()].filter(v=>v).length;
+
+  let missed=order.filter(w=>!grades.get(w));
+
+  // Save log
+  let now=new Date();
+
+  addLog({
+    date:now.toLocaleString(),
+    mode:practiceMode?"Practice":"Test",
+    score:`${right}/${order.length}`,
+    details:order.map(w=>({
+      word:w,
+      result:grades.get(w)?"Right":"Wrong"
+    }))
+  });
+
+  document.getElementById("score").innerHTML=
+    `<b>Score:</b> ${right}/${order.length}`;
+
+  if(missed.length){
+    document.getElementById("missed").innerHTML=
+      "<b>Missed:</b><ul>"+missed.map(w=>`<li>${w}</li>`).join("")+"</ul>";
+
+    document.getElementById("practice").dataset.words=
+      JSON.stringify(missed);
+  }else{
+    document.getElementById("missed").textContent="No missed words.";
+    document.getElementById("practice").dataset.words="[]";
+  }
+
+  show("summary");
+};
+
+document.getElementById("backSetup").onclick=()=>show("setup");
+
+/* ===== PRACTICE ===== */
+
+document.getElementById("practice").onclick=()=>{
+
+  let m=JSON.parse(this.dataset.words||"[]");
+  if(!m.length) return;
+
+  list=shuffle([...m]);
+  order=[...list];
+  index=0;
+  grades.clear();
+  practiceMode=true;
+
+  show("quiz");
+  loadWord();
+};
+
+document.getElementById("restart").onclick=()=>show("setup");
+
+/* ===== LOG VIEW ===== */
+
+function renderLog(){
+
+  let l=readLog();
+
+  if(!l.length){
+    document.getElementById("logData").innerHTML="No history yet.";
+    return;
+  }
+
+  let rows=l.map(e=>`
+    <tr>
+      <td>${e.date}</td>
+      <td>${e.mode}</td>
+      <td>${e.score}</td>
+      <td>
+        <details>
+          <summary>View</summary>
+          <ul>
+            ${e.details.map(d=>`<li>${d.word}: ${d.result}</li>`).join("")}
+          </ul>
+        </details>
+      </td>
+    </tr>
+  `).join("");
+
+  document.getElementById("logData").innerHTML=`
+    <table>
+      <tr><th>Date</th><th>Mode</th><th>Score</th><th>Breakdown</th></tr>
+      ${rows}
+    </table>
+  `;
+}
+
+document.getElementById("viewLog").onclick=()=>{
+  renderLog(); show("logScreen");
+};
+document.getElementById("viewLog2").onclick=()=>{
+  renderLog(); show("logScreen");
+};
+document.getElementById("backLog").onclick=()=>show("setup");
+
+/* ===== EXPORT ===== */
+
+document.getElementById("exportLog").onclick=()=>{
+
+  let l=readLog();
+  if(!l.length) return alert("No data to export.");
+
+  let rows=[
+    ["Date","Mode","Score","Word","Result"]
+  ];
+
+  l.forEach(e=>{
+    e.details.forEach(d=>{
+      rows.push([
+        e.date,
+        e.mode,
+        e.score,
+        d.word,
+        d.result
+      ]);
+    });
+  });
+
+  let csv=rows.map(r=>r.join(",")).join("\n");
+
+  let blob=new Blob([csv],{type:"text/csv"});
+  let url=URL.createObjectURL(blob);
+
+  let a=document.createElement("a");
+  a.href=url;
+  a.download="spelling_log.csv";
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+
+/* ===== CLEAR ===== */
+
+document.getElementById("clearLog").onclick=()=>{
+
+  if(confirm("Clear all saved history?")){
+    localStorage.removeItem(KEY);
+    alert("Log cleared.");
+  }
+};
+
+</script>
+
+</body>
+</html>
