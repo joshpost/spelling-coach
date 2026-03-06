@@ -375,6 +375,8 @@ document.getElementById("start").onclick=()=>{
 
   if(!raw.length) return alert("Add words first.");
 
+  localStorage.setItem("spelling_words_current", raw.join("\n"));
+
   if(document.getElementById("shuffle").checked)
     raw=shuffle(raw);
 
@@ -584,4 +586,5 @@ document.getElementById("clearLog").onclick=()=>{
 </body>
 
 </html>
+
 
