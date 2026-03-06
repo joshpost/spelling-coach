@@ -275,6 +275,10 @@ const WORDS_KEY = "spelling_words_current";
 const savedWords = localStorage.getItem(WORDS_KEY);
 document.getElementById("words").value = savedWords || DEFAULT_WORDS;
 
+document.getElementById("words").addEventListener("input", (e) => {
+  localStorage.setItem(WORDS_KEY, e.target.value.trim());
+});
+
 /* ===== STATE ===== */
 
 let list=[];
@@ -580,3 +584,4 @@ document.getElementById("clearLog").onclick=()=>{
 </body>
 
 </html>
+
