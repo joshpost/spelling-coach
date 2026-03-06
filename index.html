@@ -247,7 +247,7 @@ Press Hear Word
 
 /* ===== DEFAULT WORDS ===== */
 
-document.getElementById("words").value = `
+const DEFAULT_WORDS = `
 Dozen
 Enemy
 Deposit
@@ -269,6 +269,11 @@ American
 Independent
 Glistening
 `.trim();
+
+const WORDS_KEY = "spelling_words_current";
+
+const savedWords = localStorage.getItem(WORDS_KEY);
+document.getElementById("words").value = savedWords || DEFAULT_WORDS;
 
 /* ===== STATE ===== */
 
@@ -573,4 +578,5 @@ document.getElementById("clearLog").onclick=()=>{
 </script>
 
 </body>
+
 </html>
